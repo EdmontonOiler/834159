@@ -7,3 +7,4 @@ opencv-python-headless
 deep-translator
 scikit-learn
 joblib
+openpyxl
