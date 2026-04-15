@@ -1,2 +1,14 @@
 tesseract-ocr
+tesseract-ocr-eng
+tesseract-ocr-jpn
 tesseract-ocr-chi-sim
+tesseract-ocr-chi-tra
+tesseract-ocr-kor
+tesseract-ocr-fra
+tesseract-ocr-deu
+tesseract-ocr-spa
+tesseract-ocr-ita
+tesseract-ocr-por
+tesseract-ocr-nld
+tesseract-ocr-rus
+tesseract-ocr-tha

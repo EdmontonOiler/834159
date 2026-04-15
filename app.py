@@ -4,7 +4,9 @@
 # Added: Unexpected Allergen Risk Detection
 # ==================================================
 
+import os
 import re
+import shutil
 import streamlit as st
 import pandas as pd
 import pytesseract
@@ -17,8 +19,16 @@ from sklearn.multiclass import OneVsRestClassifier
 
 # --------------------------------------------------
 # Tesseract path
+# Compatible with local Windows and deployed Linux/cloud
 # --------------------------------------------------
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+if os.path.exists(WINDOWS_TESSERACT):
+    pytesseract.pytesseract.tesseract_cmd = WINDOWS_TESSERACT
+else:
+    tesseract_path = shutil.which("tesseract")
+    if tesseract_path:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 # --------------------------------------------------
 # OCR language / country options
@@ -263,7 +273,6 @@ def detect_unexpected_risks(text, detected_allergens=None):
     for category, keywords in unexpected_source_dict.items():
         related_allergens = category_to_allergen_keys.get(category, [])
 
-        # Skip this risk group if related allergen has already been directly detected
         if related_allergens and any(a in detected_allergens for a in related_allergens):
             continue
 
@@ -292,12 +301,23 @@ def preprocess_image(image):
 
 def extract_text_from_image(image, lang="eng"):
     processed = preprocess_image(image)
-    text = pytesseract.image_to_string(
-        processed,
-        lang=lang,
-        config="--psm 6"
-    )
-    return text
+
+    try:
+        text = pytesseract.image_to_string(
+            processed,
+            lang=lang,
+            config="--psm 6"
+        )
+        return text
+    except pytesseract.TesseractNotFoundError:
+        raise RuntimeError(
+            "Tesseract OCR is not installed on this environment. "
+            "If you deployed this app, make sure packages.txt includes tesseract-ocr."
+        )
+    except pytesseract.TesseractError as e:
+        raise RuntimeError(f"Tesseract OCR error: {e}")
+    except Exception as e:
+        raise RuntimeError(f"OCR failed: {e}")
 
 def clean_ocr_text(text):
     text = text.replace("\n", " ")
@@ -306,16 +326,16 @@ def clean_ocr_text(text):
 
 def extract_ingredient_section(text):
     patterns = [
-        r"ingredients?\s*[:\-]\s*(.*)",      # English
-        r"ingredienti\s*[:\-]\s*(.*)",       # Italian
-        r"ingrédients?\s*[:\-]\s*(.*)",      # French
-        r"zutaten\s*[:\-]\s*(.*)",           # German
-        r"ingredientes?\s*[:\-]\s*(.*)",     # Spanish / Portuguese
-        r"成分\s*[:：\-]\s*(.*)",             # Chinese
-        r"配料\s*[:：\-]\s*(.*)",             # Chinese
-        r"原料\s*[:：\-]\s*(.*)",             # Chinese / Japanese
-        r"原材料名\s*[:：\-]\s*(.*)",         # Japanese
-        r"원재료명\s*[:：\-]\s*(.*)"          # Korean
+        r"ingredients?\s*[:\-]\s*(.*)",
+        r"ingredienti\s*[:\-]\s*(.*)",
+        r"ingrédients?\s*[:\-]\s*(.*)",
+        r"zutaten\s*[:\-]\s*(.*)",
+        r"ingredientes?\s*[:\-]\s*(.*)",
+        r"成分\s*[:：\-]\s*(.*)",
+        r"配料\s*[:：\-]\s*(.*)",
+        r"原料\s*[:：\-]\s*(.*)",
+        r"原材料名\s*[:：\-]\s*(.*)",
+        r"원재료명\s*[:：\-]\s*(.*)"
     ]
 
     for pattern in patterns:
@@ -539,7 +559,7 @@ with tab2:
                 extracted_text = extract_ingredient_section(cleaned_text)
                 st.session_state["ocr_text"] = extracted_text
             except Exception as e:
-                st.error(f"OCR failed: {e}")
+                st.error(str(e))
 
     ocr_text_value = st.text_area(
         "Extracted / Editable Ingredient Text",
@@ -614,7 +634,7 @@ with tab3:
                 st.session_state["translated_ocr_text_tab3"] = translated_text_tab3
 
             except Exception as e:
-                st.error(f"OCR failed: {e}")
+                st.error(str(e))
 
     ocr_text_value_tab3 = st.text_area(
         "Extracted / Editable International Ingredient Text",
