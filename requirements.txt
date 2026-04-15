@@ -1,7 +1,9 @@
 streamlit
+pandas
+numpy
 pytesseract
 Pillow
 opencv-python-headless
-pandas
-numpy
 deep-translator
+scikit-learn
+joblib
