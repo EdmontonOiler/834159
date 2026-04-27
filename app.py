@@ -69,6 +69,7 @@ COUNTRY_OPTIONS = {
 # Load dataset and train model
 # --------------------------------------------------
 @st.cache_resource
+
 def load_model():
     df = pd.read_excel("wws data.xlsx")
     df.columns = df.columns.str.strip()
@@ -239,6 +240,7 @@ unexpected_source_dict = {
     ]
 }
 
+
 def detect_allergens(text):
     text = str(text).lower()
     detected = []
@@ -251,6 +253,7 @@ def detect_allergens(text):
                 break
 
     return detected
+
 
 def detect_unexpected_risks(text, detected_allergens=None):
     text = str(text).lower()
@@ -271,6 +274,9 @@ def detect_unexpected_risks(text, detected_allergens=None):
     }
 
     for category, keywords in unexpected_source_dict.items():
+        if category == "general risk":
+            continue
+
         related_allergens = category_to_allergen_keys.get(category, [])
 
         if related_allergens and any(a in detected_allergens for a in related_allergens):
@@ -299,6 +305,7 @@ def preprocess_image(image):
     image = image.convert("L")
     return image
 
+
 def extract_text_from_image(image, lang="eng"):
     processed = preprocess_image(image)
 
@@ -319,10 +326,12 @@ def extract_text_from_image(image, lang="eng"):
     except Exception as e:
         raise RuntimeError(f"OCR failed: {e}")
 
+
 def clean_ocr_text(text):
     text = text.replace("\n", " ")
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 def extract_ingredient_section(text):
     patterns = [
@@ -341,9 +350,25 @@ def extract_ingredient_section(text):
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            extracted = match.group(1).strip()
+            extracted = re.split(r"\bcontains\b", extracted, flags=re.IGNORECASE)[0].strip()
+            return extracted
 
-    return text.strip()
+    return re.split(r"\bcontains\b", text.strip(), flags=re.IGNORECASE)[0].strip()
+
+
+def extract_allergen_statement(text):
+    patterns = [
+        r"\bcontains\b\s+[^.:\n]+",
+        r"\bcontains\b\s*[:\-]\s*[^.\n]+"
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(0).strip()
+
+    return ""
 
 # --------------------------------------------------
 # Translation
@@ -371,60 +396,11 @@ def predict_may_contain(text):
 
     for i, label in enumerate(label_names):
         prob = float(proba[0][i])
-
-        if prob > 0.5:
-            name = label.replace("maycontain_", "")
-            name = format_allergen_name(name)
-            results.append((name, round(prob, 2)))
+        name = label.replace("maycontain_", "")
+        name = format_allergen_name(name)
+        results.append((name, prob))
 
     return results
-
-# --------------------------------------------------
-# Shared analysis function
-# --------------------------------------------------
-def run_analysis(ingredient_text):
-    ingredient_text = ingredient_text.strip()
-
-    detected = detect_allergens(ingredient_text)
-    predicted = predict_may_contain(ingredient_text)
-    unexpected_risks = detect_unexpected_risks(ingredient_text, detected)
-
-    st.subheader("Results")
-
-    st.write("### Detected Allergens")
-    if detected:
-        detected_english = [format_allergen_name(a) for a in detected]
-        st.success(", ".join(detected_english))
-    else:
-        st.write("None")
-
-    st.write("### Predicted May Contain")
-    if predicted:
-        df_result = pd.DataFrame(
-            predicted,
-            columns=["Allergen", "Probability"]
-        )
-        st.dataframe(df_result, use_container_width=True)
-    else:
-        st.write("None")
-
-    st.write("### Unexpected Allergen Risks")
-    if unexpected_risks:
-        rows = []
-        for item in unexpected_risks:
-            rows.append({
-                "Possible Allergen Group": item["possible_allergen_group"],
-                "Matched Terms": ", ".join(item["matched_terms"])
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
-        st.warning("These are risk indicators only. The ingredient source should be confirmed with supplier specifications.")
-    else:
-        st.write("None")
-
-    if detected:
-        st.info("Rule-based detection identified allergens explicitly listed in the ingredients.")
-    if predicted:
-        st.warning("The model also predicts possible 'may contain' risks based on learned ingredient patterns.")
 
 # --------------------------------------------------
 # Compliance checking
@@ -463,193 +439,925 @@ def check_compliance(ingredient_text, statement_text):
         "compliant": compliant
     }
 
-# --------------------------------------------------
+# ==================================================
 # Streamlit UI
-# --------------------------------------------------
+# ==================================================
 st.set_page_config(page_title="Allergen Risk Assessment App", layout="wide")
 
-st.title("Allergen Risk Assessment App")
-st.markdown("### Text input and image-based ingredient extraction")
+st.markdown(
+    """
+    <style>
+    .sidebar-card {
+        background: linear-gradient(180deg, #0b1b3a 0%, #10264f 100%);
+        color: white;
+        padding: 18px 16px;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    }
+    .sidebar-title {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 18px;
+    }
+    .sidebar-section-label {
+        font-size: 13px;
+        opacity: 0.8;
+        margin-top: 12px;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .sidebar-item {
+        display: block;
+        padding: 11px 12px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        background: rgba(255,255,255,0.07);
+        font-size: 14px;
+        color: white !important;
+        text-decoration: none !important;
+        transition: all 0.25s ease;
+    }
+    .sidebar-item:hover {
+        background: rgba(255,255,255,0.18);
+        transform: translateX(3px);
+        color: white !important;
+        text-decoration: none !important;
+    }
+    .sidebar-item:visited {
+        color: white !important;
+        text-decoration: none !important;
+    }
+    .sidebar-item:active {
+        color: white !important;
+        text-decoration: none !important;
+    }
+    .sidebar-item.active {
+        background: rgba(255,255,255,0.18);
+        border: 1px solid rgba(255,255,255,0.22);
+        font-weight: 700;
+    }
+    .kpi-card {
+        border-radius: 12px;
+        padding: 14px 16px;
+        min-height: 110px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .kpi-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .kpi-body {
+        font-size: 15px;
+        line-height: 1.35;
+        font-weight: 600;
+    }
+    .animated-bar-track {
+        width: 100%;
+        background: #eceff3;
+        border-radius: 999px;
+        height: 22px;
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .animated-bar-fill {
+        height: 22px;
+        border-radius: 999px;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 22px;
+        text-align: right;
+        padding-right: 8px;
+        white-space: nowrap;
+        animation: growBar 1.1s ease-out forwards;
+        transform-origin: left center;
+    }
+    @keyframes growBar {
+        from { width: 0; }
+        to { width: var(--target-width); }
+    }
+    .result-panel {
+        background: white;
+        border: 1px solid #e8eaed;
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .risk-card {
+        margin-bottom: 12px;
+        padding: 12px;
+        border-radius: 10px;
+        background: #fff7e6;
+        border: 1px solid #f6d58f;
+    }
+    .risk-title {
+        font-weight: 700;
+        color: #9a6700;
+    }
+    .risk-subtext {
+        font-size: 13px;
+        color: #666;
+        margin-top: 4px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-tab1, tab2, tab3 = st.tabs([
-    "Text Input",
-    "Image OCR Input",
-    "International Label OCR"
-])
+# ================= HEADER =================
+
+# CSS
+st.markdown("""
+<style>
+.app-banner {
+    padding: 26px 28px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #2f80ed, #1e3a8a);
+    color: white;
+    margin-bottom: 18px;
+    box-shadow: 0 10px 30px rgba(30,58,138,0.25);
+}
+
+.app-title-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.app-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-title {
+    font-size: 40px;
+    font-weight: 900;
+}
+
+.app-subtitle {
+    font-size: 20px;
+    margin-top: 6px;
+    opacity: 0.9;
+}
+
+.app-caption {
+    font-size: 14px;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+
+.app-divider {
+    height: 3px;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ffffff, rgba(255,255,255,0.4), transparent);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# HTML
+st.markdown("""
+<div class="app-banner">
+
+<div class="app-title-row">
+<div class="app-icon">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+     stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 20h16"></path>
+<path d="M6 16V8"></path>
+<path d="M12 16V4"></path>
+<path d="M18 16v-6"></path>
+</svg>
+</div>
+
+<div>
+<div class="app-title">Allergen Risk Assessment App</div>
+<div class="app-subtitle">Allergen Risk Analyzer</div>
+<div class="app-caption">Analyze ingredient lists using manual input or image OCR.</div>
+</div>
+</div>
+
+<div class="app-divider"></div>
+
+</div>
+""", unsafe_allow_html=True)
+
+with st.sidebar:
+    st.markdown(
+"""<div class="sidebar-card">
+<div class="sidebar-title">Allergen Risk<br>Assessment App</div>
+<div class="sidebar-section-label">Sections</div>
+
+<a href="#input-section" class="sidebar-item active">Input</a>
+<a href="#review-section" class="sidebar-item">Review & Edit</a>
+<a href="#results-section" class="sidebar-item">Results Dashboard</a>
+<a href="#about-section" class="sidebar-item">About</a>
+
+</div>""",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("**Quick guide**")
+    st.caption(
+        "1. Upload or enter ingredients\n\n"
+        "2. Review and edit extracted text\n\n"
+        "3. Run risk assessment"
+    )
+
+# Session state initialization
+if "ingredient_text" not in st.session_state:
+    st.session_state["ingredient_text"] = ""
+
+if "statement_text" not in st.session_state:
+    st.session_state["statement_text"] = ""
+
+if "original_ocr_text" not in st.session_state:
+    st.session_state["original_ocr_text"] = ""
 
 # --------------------------------------------------
-# Tab 1: Manual text input
+# Input section
 # --------------------------------------------------
-with tab1:
-    st.write("Enter the ingredient list directly.")
+st.markdown('<div id="input-section"></div>', unsafe_allow_html=True)
 
-    ingredient_text_manual = st.text_area(
+st.markdown(
+    """
+    <style>
+    .input-title-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .input-title-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #eaf3ff, #dbeafe);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(47,128,237,0.18);
+    }
+
+    .input-title-text {
+        font-size: 34px;
+        font-weight: 900;
+        color: #0f172a;
+        letter-spacing: 0.2px;
+    }
+
+    .input-step-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 20px 22px;
+        margin-top: 18px;
+        margin-bottom: 20px;
+        background: #ffffff;
+        box-shadow: 0 4px 14px rgba(15,23,42,0.04);
+        transition: all 0.25s ease;
+    }
+
+    .input-step-card:hover {
+        box-shadow: 0 8px 22px rgba(15,23,42,0.08);
+        transform: translateY(-1px);
+    }
+
+    .step-heading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 21px;
+        font-weight: 900;
+        color: #0f172a;
+        margin-bottom: 18px;
+        letter-spacing: 0.2px;
+    }
+
+    .step-heading::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(90deg, #dbeafe, transparent);
+        margin-left: 10px;
+    }
+
+    .step-badge {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #2f80ed, #1d4ed8);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 17px;
+        box-shadow: 0 4px 10px rgba(47,128,237,0.35);
+        transition: all 0.25s ease;
+        flex-shrink: 0;
+    }
+
+    .step-badge:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 14px rgba(47,128,237,0.45);
+    }
+
+    [data-testid="stFileUploader"] {
+        border: 2px dashed #3b82f6 !important;
+        border-radius: 14px !important;
+        padding: 18px !important;
+        background: #f8fbff !important;
+        transition: all 0.25s ease;
+    }
+
+    [data-testid="stFileUploader"]:hover {
+        background: #eef5ff !important;
+        border-color: #2563eb !important;
+    }
+
+    [data-testid="stFileUploader"] section {
+        border: none !important;
+        background: transparent !important;
+    }
+
+    .stButton > button {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+        color: white !important;
+        border: none !important;
+        padding: 12px 22px !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+        transition: all 0.25s ease !important;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.45) !important;
+        background: linear-gradient(135deg, #2563eb, #1e40af) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.container(border=True):
+
+    st.markdown(
+        """
+        <div class="input-title-row">
+            <div class="input-title-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                     stroke="#2f80ed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+            </div>
+            <div class="input-title-text">Input</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    input_method = st.radio(
+        "Choose input method",
+        ["Image OCR", "Manual Text"],
+        horizontal=True,
+        key="input_method"
+    )
+
+    if input_method == "Image OCR":
+
+        st.markdown('<div id="ocr-section"></div>', unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div class="input-step-card">
+                <div class="step-heading">
+                    <div class="step-badge">1</div>
+                    <div>Step 1 · Upload image and choose OCR settings</div>
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        left_setting, right_setting = st.columns([1, 1.7], gap="large")
+
+        with left_setting:
+            ocr_mode = st.radio(
+                "Recognition mode",
+                ["By Country", "By Language"],
+                horizontal=True,
+                key="ocr_mode"
+            )
+
+        selected_lang = "eng"
+
+        with right_setting:
+            if ocr_mode == "By Country":
+                selected_country = st.selectbox(
+                    "Select country / region",
+                    list(COUNTRY_OPTIONS.keys()),
+                    key="country_select"
+                )
+                selected_lang = COUNTRY_OPTIONS[selected_country]
+            else:
+                selected_language = st.selectbox(
+                    "Select language",
+                    list(LANG_OPTIONS.keys()),
+                    key="language_select"
+                )
+                selected_lang = LANG_OPTIONS[selected_language]
+
+        uploaded_file = st.file_uploader(
+            "Upload food label image",
+            type=["png", "jpg", "jpeg"],
+            key="ocr_upload"
+        )
+
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(image, caption="Uploaded Image", width=300)
+
+            if st.button("Extract Text", key="extract_ocr"):
+                try:
+                    raw_text = extract_text_from_image(image, lang=selected_lang)
+                    cleaned_text = clean_ocr_text(raw_text)
+                    extracted_text = extract_ingredient_section(cleaned_text)
+                    extracted_statement = extract_allergen_statement(cleaned_text)
+
+                    if selected_lang != "eng":
+                        translated_text = translate_to_english(extracted_text)
+                        st.session_state["original_ocr_text"] = extracted_text
+                        st.session_state["ingredient_text"] = translated_text
+                    else:
+                        st.session_state["original_ocr_text"] = ""
+                        st.session_state["ingredient_text"] = extracted_text
+
+                    st.session_state["statement_text"] = extracted_statement
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(str(e))
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        if st.session_state["original_ocr_text"]:
+            with st.expander("View original extracted text"):
+                st.text_area(
+                    "Original Extracted Text",
+                    height=120,
+                    key="original_ocr_text"
+                )
+
+        st.markdown(
+            """
+            <div class="input-step-card">
+                <div class="step-heading">
+                    <div class="step-badge">2</div>
+                    <div>Step 2 · Review extracted text</div>
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    else:
+        st.info("Enter ingredient list manually.")
+
+        st.markdown(
+            """
+            <div class="input-step-card">
+                <div class="step-heading">
+                    <div class="step-badge">1</div>
+                    <div>Step 1 · Enter ingredient information</div>
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div id="review-section"></div>', unsafe_allow_html=True)
+
+    ingredient_text = st.text_area(
         "Ingredient List",
-        placeholder="e.g. Sugar, Milk Solids, Cocoa Butter, Soy Lecithin, Wheat Flour",
-        height=180,
-        key="manual_text"
+        height=140,
+        key="ingredient_text"
     )
 
     statement_text = st.text_area(
         "Allergen Statement (optional)",
-        placeholder="e.g. May contain milk and soy",
-        height=100
+        placeholder="e.g. Contains milk and soy",
+        height=90,
+        key="statement_text"
     )
 
-    if st.button("Analyze Text", key="analyze_text"):
-        result = check_compliance(ingredient_text_manual, statement_text)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="input-step-card">
+            <div class="step-heading">
+                <div class="step-badge">3</div>
+                <div>Step 3 · Run assessment</div>
+            </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    run_analysis = st.button("▶ Run Risk Assessment", key="analyze")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown('<div id="analysis-section"></div>', unsafe_allow_html=True)
+st.markdown('<div id="results-section"></div>', unsafe_allow_html=True)
+
+# --------------------------------------------------
+# Analysis
+# --------------------------------------------------
+if run_analysis:
+
+    if ingredient_text.strip() == "":
+        st.warning("Please enter or extract ingredient text first.")
+
+    else:
+        result = check_compliance(ingredient_text, statement_text)
 
         detected_display = [format_allergen_name(a) for a in result["detected_allergens"]]
         declared_display = [format_allergen_name(a) for a in result["declared_allergens"]]
         missing_display = [format_allergen_name(a) for a in result["missing_allergens"]]
-        may_contain_display = [f"{a} ({p})" for a, p in result["may_contain"]]
 
-        st.subheader("Results")
-
-        st.success(f"Detected: {', '.join(detected_display) if detected_display else 'None'}")
-        st.info(f"Declared: {', '.join(declared_display) if declared_display else 'None'}")
-
-        if result["missing_allergens"]:
-            st.error(f"Missing allergens: {', '.join(missing_display)}")
-        else:
-            st.success("No missing allergens")
-
-        st.warning(f"May contain: {', '.join(may_contain_display) if may_contain_display else 'None'}")
-
-        st.write("### Unexpected Allergen Risks")
-        if result["unexpected_risks"]:
-            rows = []
-            for item in result["unexpected_risks"]:
-                rows.append({
-                    "Possible Allergen Group": item["possible_allergen_group"],
-                    "Matched Terms": ", ".join(item["matched_terms"])
-                })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
-            st.warning("These terms may indicate hidden allergen sources and should be checked with supplier specifications.")
-        else:
-            st.write("None")
-
-        if result["compliant"]:
-            st.success("Product is compliant")
-        else:
-            st.error("Product is NOT compliant")
-
-# --------------------------------------------------
-# Tab 2: Image OCR input
-# --------------------------------------------------
-with tab2:
-    st.write("Upload a food label image. The app will extract text automatically, and you can edit it before analysis.")
-
-    uploaded_file = st.file_uploader(
-        "Upload food label image",
-        type=["png", "jpg", "jpeg"],
-        key="ocr_upload"
-    )
-
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_container_width=True)
-
-        if st.button("Extract Text from Image", key="extract_ocr"):
-            try:
-                raw_text = extract_text_from_image(image, lang="eng")
-                st.write("OCR raw text:", raw_text)
-
-                cleaned_text = clean_ocr_text(raw_text)
-                extracted_text = extract_ingredient_section(cleaned_text)
-                st.session_state["ocr_text"] = extracted_text
-            except Exception as e:
-                st.error(str(e))
-
-    ocr_text_value = st.text_area(
-        "Extracted / Editable Ingredient Text",
-        value=st.session_state.get("ocr_text", ""),
-        height=180,
-        key="editable_ocr_text"
-    )
-
-    if st.button("Analyze OCR Text", key="analyze_ocr"):
-        if ocr_text_value.strip() == "":
-            st.warning("Please extract or enter ingredient text first.")
-        else:
-            run_analysis(ocr_text_value)
-
-# --------------------------------------------------
-# Tab 3: International label OCR
-# --------------------------------------------------
-with tab3:
-    st.write("Upload an international food label image. Select the country or language for OCR recognition.")
-
-    ocr_mode_tab3 = st.radio(
-        "Recognition mode",
-        ["By Country", "By Language"],
-        horizontal=True,
-        key="tab3_ocr_mode"
-    )
-
-    selected_lang_tab3 = "eng"
-
-    if ocr_mode_tab3 == "By Country":
-        selected_country_tab3 = st.selectbox(
-            "Select country / region",
-            list(COUNTRY_OPTIONS.keys()),
-            key="tab3_country"
+        st.markdown(
+            """
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div style="
+                    width:36px;
+                    height:36px;
+                    border-radius:10px;
+                    background:#eef5ff;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                ">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                         stroke="#2f80ed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="20" x2="4" y2="10"></line>
+                        <line x1="10" y1="20" x2="10" y2="4"></line>
+                        <line x1="16" y1="20" x2="16" y2="14"></line>
+                        <line x1="22" y1="20" x2="22" y2="8"></line>
+                    </svg>
+                </div>
+                <div style="font-size:30px;font-weight:800;">
+                    Results
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        selected_lang_tab3 = COUNTRY_OPTIONS[selected_country_tab3]
 
-    elif ocr_mode_tab3 == "By Language":
-        selected_language_tab3 = st.selectbox(
-            "Select language",
-            list(LANG_OPTIONS.keys()),
-            key="tab3_language"
-        )
-        selected_lang_tab3 = LANG_OPTIONS[selected_language_tab3]
+        main_left, main_right = st.columns([1, 1], gap="large")
 
-    uploaded_file_tab3 = st.file_uploader(
-        "Upload international food label image",
-        type=["png", "jpg", "jpeg"],
-        key="ocr_upload_tab3"
-    )
+        # =========================
+        # LEFT SIDE
+        # =========================
+        with main_left:
+            with st.container(border=True):
 
-    if "editable_ocr_text_tab3" not in st.session_state:
-        st.session_state["editable_ocr_text_tab3"] = ""
+                st.markdown(
+                    """
+                    <style>
+                    .kpi-card {
+                        border-radius: 10px;
+                        padding: 20px 22px;
+                        height: 160px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                        border: 1px solid rgba(0,0,0,0.06);
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        margin-bottom: 18px;
+                    }
 
-    if "translated_ocr_text_tab3" not in st.session_state:
-        st.session_state["translated_ocr_text_tab3"] = ""
+                    .kpi-header {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                    }
 
-    if uploaded_file_tab3 is not None:
-        image_tab3 = Image.open(uploaded_file_tab3)
-        st.image(image_tab3, caption="Uploaded International Label", use_container_width=True)
+                    .kpi-icon {
+                        width: 34px;
+                        height: 34px;
+                        border-radius: 50%;
+                        color: white;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        font-weight: 800;
+                    }
 
-        if st.button("Extract International Text", key="extract_ocr_tab3"):
-            try:
-                raw_text_tab3 = extract_text_from_image(image_tab3, lang=selected_lang_tab3)
-                st.write("OCR raw text:", raw_text_tab3)
+                    .kpi-title {
+                        font-size: 16px;
+                        font-weight: 800;
+                        color: #0f172a;
+                    }
 
-                cleaned_text_tab3 = clean_ocr_text(raw_text_tab3)
-                extracted_text_tab3 = extract_ingredient_section(cleaned_text_tab3)
-                translated_text_tab3 = translate_to_english(extracted_text_tab3)
+                    .kpi-main {
+                        font-size: 26px;
+                        font-weight: 900;
+                    }
 
-                st.session_state["editable_ocr_text_tab3"] = extracted_text_tab3
-                st.session_state["translated_ocr_text_tab3"] = translated_text_tab3
+                    .kpi-body {
+                        font-size: 16px;
+                        font-weight: 700;
+                        color: #0f172a;
+                    }
 
-            except Exception as e:
-                st.error(str(e))
+                    .risk-bg {
+                        background: #fff1f2;
+                        border-color: #ffd0d5;
+                    }
 
-    ocr_text_value_tab3 = st.text_area(
-        "Extracted / Editable International Ingredient Text",
-        height=180,
-        key="editable_ocr_text_tab3"
-    )
+                    .success-bg {
+                        background: #e6f4ea;
+                        border-color: #b7e1cd;
+                    }
 
-    translated_text_value_tab3 = st.text_area(
-        "Translated English Ingredient Text",
-        height=180,
-        key="translated_ocr_text_tab3"
-    )
+                    .safe-bg {
+                        background: #eef5ff;
+                        border-color: #d4e5ff;
+                    }
 
-    if st.button("Analyze International OCR Text", key="analyze_ocr_tab3"):
-        if translated_text_value_tab3.strip() == "":
-            st.warning("Please extract or enter ingredient text first.")
-        else:
-            run_analysis(translated_text_value_tab3)
+                    .red-icon { background: #ef4444; }
+                    .green-icon { background: #22c55e; }
+                    .blue-icon { background: #2f80ed; }
+
+                    .red-text { color: #d60000; }
+                    .green-text { color: #16a34a; }
+
+                    .derivative-title-row {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        margin: 20px 0;
+                    }
+
+                    .warning-icon {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 10px;
+                        background: #fff3cd;
+                        color: #b26a00;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 22px;
+                        font-weight: 800;
+                    }
+
+                    .derivative-title {
+                        font-size: 20px;
+                        font-weight: 800;
+                        color: #1f2a44;
+                    }
+
+                    .risk-card {
+                        margin-bottom: 20px;
+                        padding: 20px;
+                        border-radius: 12px;
+                        background: #fff8e8;
+                        border: 1px solid #ffd98a;
+                    }
+
+                    .risk-title {
+                        font-size: 18px;
+                        font-weight: 800;
+                        color: #9a5b00;
+                    }
+
+                    .risk-subtext {
+                        font-size: 14px;
+                        color: #64748b;
+                    }
+
+                    .risk-note {
+                        margin-top: 20px;
+                        padding: 20px;
+                        border-radius: 12px;
+                        background: #f3f6fb;
+                        color: #64748b;
+                        display: flex;
+                        gap: 10px;
+                    }
+
+                    .info-icon {
+                        width: 22px;
+                        height: 22px;
+                        border-radius: 50%;
+                        border: 2px solid #7c8da6;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 14px;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                top_left, top_right = st.columns(2)
+                bottom_left, bottom_right = st.columns(2)
+
+                is_ok = result["compliant"]
+
+                with top_left:
+                    st.markdown(
+                        f"""
+                        <div class="kpi-card {'success-bg' if is_ok else 'risk-bg'}">
+                            <div class="kpi-header">
+                                <div class="kpi-icon {'green-icon' if is_ok else 'red-icon'}">
+                                    {"✓" if is_ok else "!"}
+                                </div>
+                                <div class="kpi-title">Compliance</div>
+                            </div>
+                            <div>
+                                <div class="kpi-main {'green-text' if is_ok else 'red-text'}">
+                                    {"COMPLIANT" if is_ok else "NOT COMPLIANT"}
+                                </div>
+                                <div class="kpi-body">
+                                    {"All detected allergens are declared" if is_ok else "Label mismatch detected"}
+                                </div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                with top_right:
+                    st.markdown(
+                        f"""
+                        <div class="kpi-card {'success-bg' if not missing_display else 'risk-bg'}">
+                            <div class="kpi-header">
+                                <div class="kpi-icon {'green-icon' if not missing_display else 'red-icon'}">
+                                    {"✓" if not missing_display else "!"}
+                                </div>
+                                <div class="kpi-title">Missing Allergens</div>
+                            </div>
+                            <div>
+                                <div class="kpi-main {'green-text' if not missing_display else 'red-text'}">
+                                    {len(missing_display)}
+                                </div>
+                                <div class="kpi-body">
+                                    {', '.join(missing_display) if missing_display else 'None'}
+                                </div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                with bottom_left:
+                    st.markdown(
+                        f"""
+                        <div class="kpi-card safe-bg">
+                            <div class="kpi-header">
+                                <div class="kpi-icon blue-icon">✓</div>
+                                <div class="kpi-title">Detected Allergens</div>
+                            </div>
+                            <div class="kpi-body">
+                                {', '.join(detected_display) if detected_display else 'None'}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                with bottom_right:
+                    st.markdown(
+                        f"""
+                        <div class="kpi-card safe-bg">
+                            <div class="kpi-header">
+                                <div class="kpi-icon blue-icon">▣</div>
+                                <div class="kpi-title">Declared Allergens</div>
+                            </div>
+                            <div class="kpi-body">
+                                {', '.join(declared_display) if declared_display else 'None'}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown(
+                    """
+                    <div class="derivative-title-row">
+                        <div class="warning-icon">⚠</div>
+                        <div class="derivative-title">
+                            Potential Allergen Risks from Derivative Ingredients
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                if result["unexpected_risks"]:
+                    for item in result["unexpected_risks"]:
+                        group = item["possible_allergen_group"].title()
+                        terms = ", ".join(item["matched_terms"])
+
+                        st.markdown(
+                            f"""
+                            <div class="risk-card">
+                                <div class="risk-title">{group} → {terms}</div>
+                                <div class="risk-subtext">
+                                    Potential derivative risk – verify ingredient source
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    st.write("None")
+
+                st.markdown(
+                    """
+                    <div class="risk-note">
+                        <div class="info-icon">i</div>
+                        <div>
+                            Risks shown here are based on derivative or indirect ingredient sources and should be verified before use.
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                st.markdown("<div style='height:80px;'></div>", unsafe_allow_html=True)
+
+        # =========================
+        # RIGHT SIDE
+        # =========================
+        with main_right:
+            with st.container(border=True):
+
+                st.write("### 📊 Model-Predicted Cross-Contamination Allergens")
+
+                filtered = [(a, p) for (a, p) in result["may_contain"] if p >= 0.001]
+                filtered = sorted(filtered, key=lambda x: x[1], reverse=True)
+
+                if filtered:
+                    for allergen, prob in filtered:
+                        percent = prob * 100
+                        color = "#e53935" if percent > 70 else "#43a047"
+
+                        st.markdown(
+                            f"""
+                            <div style="margin-bottom:16px;">
+                                <div style="display:flex;justify-content:space-between;">
+                                    <span style="font-weight:700;">{allergen}</span>
+                                </div>
+                                <div class="animated-bar-track">
+                                    <div class="animated-bar-fill"
+                                         style="--target-width:{percent:.1f}%; background:{color};">
+                                        {percent:.1f}%
+                                    </div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                else:
+                    st.write("None")
+
+                st.markdown(
+                    """
+                    <span style='color:#e53935;'>●</span> Red = High probability (&gt;70%)
+                    &nbsp;&nbsp;&nbsp;
+                    <span style='color:#16a34a;'>●</span> Green = Low probability (≤70%)
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+# --------------------------------------------------
+# About
+# --------------------------------------------------
+st.markdown('<div id="about-section"></div>', unsafe_allow_html=True)
+
+st.markdown("## About")
+st.write(
+    "This app analyzes ingredient lists using OCR and machine learning "
+    "to detect allergen risks, cross-contamination, and labeling compliance."
+)
