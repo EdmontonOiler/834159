@@ -1,0 +1,61 @@
+alias,ingredient_id,standard_name,match_type
+plain flour,ING001,wheat flour,alias
+all purpose flour,ING001,wheat flour,alias
+all-purpose flour,ING001,wheat flour,alias
+wheat flour,ING001,wheat flour,exact
+whole wheat flour,ING002,wholemeal wheat flour,alias
+wholemeal flour,ING002,wholemeal wheat flour,alias
+oats,ING003,rolled oats,alias
+rolled oats,ING003,rolled oats,exact
+cornflour,ING004,corn starch,alias
+corn starch,ING004,corn starch,exact
+cooked rice,ING005,white rice cooked,alias
+rice cooked,ING005,white rice cooked,alias
+sugar,ING006,white sugar,alias
+caster sugar,ING006,white sugar,alias
+white sugar,ING006,white sugar,exact
+brown sugar,ING007,brown sugar,exact
+honey,ING008,honey,exact
+glucose syrup,ING009,glucose syrup,exact
+sodium chloride,ING010,salt,alias
+table salt,ING010,salt,alias
+salt,ING010,salt,exact
+baking powder,ING011,baking powder,exact
+bicarbonate soda,ING012,baking soda,alias
+sodium bicarbonate,ING012,baking soda,alias
+baking soda,ING012,baking soda,exact
+vegetable oil,ING013,canola oil,alias
+canola oil,ING013,canola oil,exact
+olive oil,ING014,olive oil,exact
+butter,ING015,butter,exact
+margarine,ING016,margarine,exact
+milk,ING017,whole milk,alias
+whole milk,ING017,whole milk,exact
+skim milk,ING018,skim milk,exact
+whole milk powder,ING019,milk powder whole,alias
+milk powder,ING019,milk powder whole,alias
+cheddar,ING020,cheddar cheese,alias
+cheddar cheese,ING020,cheddar cheese,exact
+egg,ING021,egg whole raw,alias
+whole egg,ING021,egg whole raw,alias
+egg whole raw,ING021,egg whole raw,exact
+cocoa,ING022,cocoa powder unsweetened,alias
+cocoa powder,ING022,cocoa powder unsweetened,alias
+dark chocolate,ING023,dark chocolate,exact
+peanuts,ING024,peanut roasted,alias
+roasted peanut,ING024,peanut roasted,alias
+almonds,ING025,almond raw,alias
+almond,ING025,almond raw,alias
+sesame,ING026,sesame seed,alias
+sesame seed,ING026,sesame seed,exact
+apple,ING027,apple raw,alias
+banana,ING028,banana raw,alias
+tomato,ING029,tomato raw,alias
+onion,ING030,onion raw,alias
+chicken breast,ING031,chicken breast raw,alias
+beef mince,ING032,beef mince raw,alias
+tuna,ING033,tuna canned in springwater drained,alias
+water,ING034,water,exact
+soy sauce,ING035,soy sauce,exact
+tomato ketchup,ING036,tomato sauce,alias
+tomato sauce,ING036,tomato sauce,exact

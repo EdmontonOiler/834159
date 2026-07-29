@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+*_backup_*/
+*.bak*
+app.py.bak*
+Allergen_Risk_Assessment_App.py
+
+.DS_Store
+Thumbs.db

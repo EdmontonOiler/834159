@@ -8,3 +8,4 @@ deep-translator
 scikit-learn
 joblib
 openpyxl
+easyocr
