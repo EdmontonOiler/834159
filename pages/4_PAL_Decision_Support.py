@@ -1,3 +1,4 @@
+import html
 import os
 
 import pandas as pd
@@ -346,6 +347,179 @@ st.markdown(
         text-transform: uppercase;
         margin: 0 0 6px 2px;
     }
+    .pal-compact-result-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        margin: 8px 0 18px 0;
+        font-size: 13px;
+    }
+    .pal-compact-result-table th {
+        background: #f8fafc;
+        color: #64748b;
+        font-weight: 750;
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid #e5e7eb;
+        line-height: 1.2;
+        white-space: normal;
+    }
+    .pal-compact-result-table td {
+        color: #0f172a;
+        padding: 10px 8px;
+        border-bottom: 1px solid #eef2f7;
+        vertical-align: middle;
+        line-height: 1.25;
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
+    .pal-compact-result-table tr:last-child td {
+        border-bottom: 0;
+    }
+    .pal-compact-result-table .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .pal-compact-result-table .allergen {
+        width: 8%;
+        font-weight: 800;
+    }
+    .pal-compact-result-table .small-col {
+        width: 8%;
+    }
+    .pal-compact-result-table .medium-col {
+        width: 10%;
+    }
+    .pal-compact-result-table .status-col {
+        width: 13%;
+    }
+    .pal-compact-result-table .decision-col {
+        width: 18%;
+    }
+    .pal-status-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+    .pal-status-pill.below {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .pal-status-pill.above {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .pal-guidance-text {
+        font-weight: 650;
+        color: #334155;
+    }
+    .pal-result-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 14px;
+        margin: 10px 0 20px 0;
+    }
+    .pal-result-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 16px 18px;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.045);
+    }
+    .pal-result-card.above {
+        border-color: #fecaca;
+        background: #fffafa;
+    }
+    .pal-result-card.below {
+        border-color: #bbf7d0;
+        background: #fbfffc;
+    }
+    .pal-result-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .pal-result-card-title {
+        color: #0f172a;
+        font-size: 19px;
+        font-weight: 850;
+        line-height: 1.15;
+    }
+    .pal-result-badge {
+        border-radius: 999px;
+        padding: 7px 11px;
+        font-size: 12px;
+        font-weight: 850;
+        line-height: 1.15;
+        text-align: center;
+        white-space: normal;
+        max-width: 185px;
+    }
+    .pal-result-badge.above {
+        background: #dc2626;
+        color: #ffffff;
+    }
+    .pal-result-badge.below {
+        background: #16a34a;
+        color: #ffffff;
+    }
+    .pal-result-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px 12px;
+        margin: 10px 0 12px 0;
+    }
+    .pal-result-detail {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: rgba(248, 250, 252, 0.84);
+        padding: 10px 11px;
+        min-height: 62px;
+    }
+    .pal-result-detail-label {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: 0.035em;
+        margin-bottom: 5px;
+    }
+    .pal-result-detail-value {
+        color: #0f172a;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .pal-result-interpretation {
+        border-top: 1px solid #e5e7eb;
+        padding-top: 11px;
+        color: #334155;
+        font-size: 14px;
+        line-height: 1.45;
+    }
+    .pal-result-interpretation strong {
+        color: #0f172a;
+    }
+    @media (max-width: 760px) {
+        .pal-result-card-grid {
+            grid-template-columns: 1fr;
+        }
+        .pal-result-details {
+            grid-template-columns: 1fr;
+        }
+    }
     .formula-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -487,31 +661,90 @@ def load_scenario(name):
 def calculate_exposure(concentration_mg_per_kg, serving_size_g, reference_dose_mg):
     exposure_mg = concentration_mg_per_kg * serving_size_g / 1000
     risk_ratio = exposure_mg / reference_dose_mg if reference_dose_mg else 0
-    if risk_ratio >= 1:
-        decision = "PAL may be required"
+    action_level_mg_per_kg = (reference_dose_mg * 1000 / serving_size_g) if serving_size_g else 0
+
+    if concentration_mg_per_kg > action_level_mg_per_kg:
+        decision = "Above action level - mitigation review needed"
+        action_level_status = "Above action level"
         interpretation = (
-            "Estimated exposure is at or above the selected reference dose. "
-            "Precautionary allergen labelling should be considered and reviewed by a qualified food safety or regulatory expert."
-        )
-    elif risk_ratio >= 0.5:
-        decision = "Review recommended"
-        interpretation = (
-            "Estimated exposure is below the reference dose but close enough to require careful review, "
-            "especially if analytical uncertainty, serving size variation or batch variability may be relevant."
+            "The detected concentration is above the calculated action level. "
+            "Additional risk mitigation should be reviewed. If the level cannot be reduced below the action level, PAL may be required."
         )
     else:
-        decision = "PAL may not be required"
+        decision = "At or below action level - PAL may not be required"
+        action_level_status = "At or below action level"
         interpretation = (
-            "Estimated exposure is below the selected reference dose. "
-            "This supports a lower-risk interpretation, but it does not replace expert judgement or regulatory review."
+            "The detected concentration is at or below the calculated action level. "
+            "This supports omission of PAL, provided that the risk assessment and supporting evidence are documented."
         )
 
     return {
         "exposure_mg": exposure_mg,
         "risk_ratio": risk_ratio,
+        "action_level_mg_per_kg": action_level_mg_per_kg,
+        "action_level_status": action_level_status,
         "decision": decision,
         "interpretation": interpretation,
     }
+
+
+def fmt_pal_number(value, digits=2):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return ""
+    formatted = f"{value:.{digits}f}"
+    return formatted.rstrip("0").rstrip(".") if "." in formatted else formatted
+
+
+def render_pal_result_cards(display_df):
+    for row in display_df.to_dict("records"):
+        status = str(row.get("Action level status", ""))
+        above_action_level = status.lower().startswith("above")
+        badge_text = (
+            "Above action level - mitigation review needed"
+            if above_action_level
+            else "At or below action level - PAL may not be required"
+        )
+        badge_color = "#dc2626" if above_action_level else "#16a34a"
+        card_bg = "#fffafa" if above_action_level else "#fbfffc"
+        card_border = "#fecaca" if above_action_level else "#bbf7d0"
+
+        with st.container(border=True):
+            st.markdown(
+                f"""
+                <div style="border-left: 5px solid {card_border}; background: {card_bg}; padding: 2px 0 2px 10px; border-radius: 6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+                        <div style="font-size:22px; font-weight:850; color:#0f172a;">{html.escape(str(row.get('Allergen', '')))}</div>
+                        <div style="background:{badge_color}; color:white; border-radius:999px; padding:7px 12px; font-size:13px; font-weight:850; max-width:360px; text-align:center;">
+                            {html.escape(badge_text)}
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Detected concentration", f"{fmt_pal_number(row.get('Concentration (mg/kg)'), 2)} mg/kg food")
+            c2.metric("Serving size", f"{fmt_pal_number(row.get('Serving size (g)'), 1)} g")
+            c3.metric("Exposure per serving", f"{fmt_pal_number(row.get('Exposure per serving (mg protein)'), 3)} mg protein")
+
+            c4, c5, c6 = st.columns(3)
+            c4.metric("Reference dose", f"{fmt_pal_number(row.get('Reference dose (mg protein)'), 2)} mg protein")
+            c5.metric("Action level", f"{fmt_pal_number(row.get('Action level (mg/kg food)'), 2)} mg/kg food")
+            c6.metric("Risk ratio", fmt_pal_number(row.get("Risk ratio"), 2))
+
+            st.markdown(
+                f"""
+                <div style="margin-top:8px; color:#334155; font-size:15px; line-height:1.5;">
+                    <strong>Action level status:</strong> {html.escape(status)}<br>
+                    <strong>Decision support:</strong> {html.escape(str(row.get('Decision support', '')))}<br>
+                    <strong>Interpretation:</strong> {html.escape(str(row.get('Interpretation', '')))}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def build_validation_summary(reference_doses):
@@ -535,6 +768,8 @@ def build_validation_summary(reference_doses):
             "Serving size (g)": scenario["serving_size"],
             "Exposure (mg protein)": round(result["exposure_mg"], 4),
             "Reference dose (mg protein)": reference_dose,
+            "Action level (mg/kg food)": round(result["action_level_mg_per_kg"], 2),
+            "Action level status": result["action_level_status"],
             "Risk ratio": round(result["risk_ratio"], 2),
             "Decision support": result["decision"],
         })
@@ -584,7 +819,7 @@ st.markdown(
         <div class="workflow-card">
             <div class="workflow-step">Step 3</div>
             <div class="workflow-title">Support PAL decision</div>
-            <div class="workflow-text">Compare exposure with a selected VITAL 4.0 reference dose.</div>
+            <div class="workflow-text">Compare the detected concentration with the calculated VITAL 4.0 action level.</div>
         </div>
     </div>
     """,
@@ -636,7 +871,7 @@ with st.container(border=True):
                 <div class="pal-help-title">How to use this module</div>
                 <div class="pal-help-step"><strong>1.</strong> Load a sample or start from blank user input.</div>
                 <div class="pal-help-step"><strong>2.</strong> Enter the detected allergen concentration and serving size.</div>
-                <div class="pal-help-step"><strong>3.</strong> Calculate exposure and compare it with the VITAL 4.0 reference dose.</div>
+                <div class="pal-help-step"><strong>3.</strong> Calculate exposure and compare the detected concentration with the action level.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -712,6 +947,8 @@ with st.container(border=True):
                 "Serving size (g)": serving_size,
                 "Exposure per serving (mg protein)": result["exposure_mg"],
                 "Reference dose (mg protein)": reference_dose,
+                "Action level (mg/kg food)": result["action_level_mg_per_kg"],
+                "Action level status": result["action_level_status"],
                 "Risk ratio": result["risk_ratio"],
                 "Decision support": result["decision"],
                 "Reference source": reference_row["source"],
@@ -733,30 +970,24 @@ if "module2_result_rows" in st.session_state:
         else:
             max_ratio = float(output_df["Risk ratio"].max())
             highest_row = output_df.sort_values("Risk ratio", ascending=False).iloc[0]
-            if max_ratio >= 1:
-                overall_decision = "PAL may be required"
+            if max_ratio > 1:
+                overall_decision = "Mitigation review / PAL may be required"
                 summary_class = "required"
                 summary_note = (
                     f"Highest risk: {highest_row['Allergen']} has a risk ratio of {max_ratio:.2f}. "
-                    "At least one allergen is at or above the selected VITAL 4.0 reference dose."
-                )
-            elif max_ratio >= 0.5:
-                overall_decision = "Review recommended"
-                summary_class = "review"
-                summary_note = (
-                    f"Highest risk: {highest_row['Allergen']} has a risk ratio of {max_ratio:.2f}. "
-                    "At least one allergen is below but close to the selected reference dose."
+                    "At least one allergen is above the calculated action level. Review whether additional mitigation can reduce the level below the action level before deciding on PAL."
                 )
             else:
                 overall_decision = "PAL may not be required"
                 summary_class = "low"
                 summary_note = (
                     f"Highest risk: {highest_row['Allergen']} has a risk ratio of {max_ratio:.2f}. "
-                    "All assessed allergens are below 50% of their selected reference dose."
+                    "All assessed allergens are at or below their calculated action levels. Document and retain the risk assessment evidence supporting the omission of PAL."
                 )
 
-            display_df = output_df.drop(columns=["Interpretation"])
+            display_df = output_df.copy()
             display_df["Exposure per serving (mg protein)"] = display_df["Exposure per serving (mg protein)"].round(4)
+            display_df["Action level (mg/kg food)"] = display_df["Action level (mg/kg food)"].round(2)
             display_df["Risk ratio"] = display_df["Risk ratio"].round(2)
 
             result_tab, method_tab = st.tabs([
@@ -765,7 +996,7 @@ if "module2_result_rows" in st.session_state:
             ])
 
             with result_tab:
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                render_pal_result_cards(display_df)
             with method_tab:
                 st.markdown(
                     """
@@ -778,10 +1009,24 @@ if "module2_result_rows" in st.session_state:
                             </div>
                         </div>
                         <div class="formula-card">
+                            <div class="formula-title">Action level</div>
+                            <div class="formula-body">
+                                <span class="formula-code">Action level = reference dose x 1000 / serving size</span><br>
+                                Converts the VITAL 4.0 reference dose into a concentration limit for the selected serving size.
+                            </div>
+                        </div>
+                        <div class="formula-card">
                             <div class="formula-title">Risk ratio</div>
                             <div class="formula-body">
                                 <span class="formula-code">Risk ratio = exposure / reference dose</span><br>
-                                Compares estimated exposure with each selected VITAL 4.0 allergen reference dose.
+                                This is equivalent to comparing detected concentration with the calculated action level.
+                            </div>
+                        </div>
+                        <div class="formula-card">
+                            <div class="formula-title">PAL decision workflow</div>
+                            <div class="formula-body">
+                                <span class="formula-code">Concentration <= action level: PAL may not be required</span><br>
+                                <span class="formula-code">Concentration > action level: mitigation review / PAL may be required</span>
                             </div>
                         </div>
                     </div>
@@ -814,7 +1059,7 @@ if "module2_result_rows" in st.session_state:
             )
             st.download_button(
                 "Download assessment CSV",
-                display_df.to_csv(index=False).encode("utf-8"),
+                output_df.drop(columns=["Interpretation"]).to_csv(index=False).encode("utf-8"),
                 file_name="pal_multi_allergen_decision_support_assessment.csv",
                 mime="text/csv",
             )
